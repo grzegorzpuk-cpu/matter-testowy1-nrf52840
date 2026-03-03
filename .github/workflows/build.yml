@@ -28,6 +28,12 @@ jobs:
 
       - name: Initialize NCS workspace
         run: |
+          # Activate Python venv where west is installed in the toolchain container
+          if [ -f "/workdir/.venv/bin/activate" ]; then
+            . /workdir/.venv/bin/activate
+          else
+            pip3 install west
+          fi
           if [ ! -d "/workdir/ncs/.west" ]; then
             west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.1.1 /workdir/ncs
             cd /workdir/ncs && west update --narrow -o=--depth=1
@@ -38,12 +44,16 @@ jobs:
 
       - name: Build for nRF52840DK
         run: |
-          cd /workdir/ncs
+          # Activate Python venv where west is installed in the toolchain container
+          if [ -f "/workdir/.venv/bin/activate" ]; then
+            . /workdir/.venv/bin/activate
+          fi
           west build \
             -b nrf52840dk/nrf52840 \
-            $GITHUB_WORKSPACE/project \
+            /workdir/ncs \
             --sysbuild \
-            -d /workdir/build
+            -d /workdir/build \
+            -- -DAPP_DIR=/__w/matter-testowy1-nrf52840/matter-testowy1-nrf52840/project
 
       - name: Upload firmware artifacts
         if: success()
