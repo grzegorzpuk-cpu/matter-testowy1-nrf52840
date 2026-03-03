@@ -12,6 +12,10 @@ jobs:
     container:
       image: ghcr.io/nrfconnect/sdk-nrf-toolchain:v3.1.1
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -26,34 +30,81 @@ jobs:
           restore-keys: |
             ncs-v3.1.1-
 
+      - name: Find and setup west
+        run: |
+          echo "=== PATH ==="
+          echo "$PATH"
+          echo "=== Finding west ==="
+          find /usr /opt /workdir /root /home -name "west" -type f 2>/dev/null | head -10 || true
+          echo "=== Finding python3 ==="
+          find /usr /opt /workdir -name "python3" -type f 2>/dev/null | head -5 || true
+          echo "=== nrfutil ==="
+          which nrfutil || true
+          echo "=== ls /workdir ==="
+          ls /workdir/ 2>/dev/null || echo "(pusty lub brak)"
+          echo "=== ls /opt ==="
+          ls /opt/ 2>/dev/null || echo "(pusty lub brak)"
+
       - name: Initialize NCS workspace
         run: |
-          # Activate Python venv where west is installed in the toolchain container
-          if [ -f "/workdir/.venv/bin/activate" ]; then
-            . /workdir/.venv/bin/activate
-          else
-            pip3 install west
+          # Próbuj różne znane lokalizacje west w kontenerze nRF
+          WEST_CMD=""
+          for p in \
+            /workdir/.venv/bin/west \
+            /usr/local/bin/west \
+            /usr/bin/west \
+            /opt/nordic/ncs/v3.1.1/bin/west \
+            $(find /opt /workdir /usr -name "west" -type f 2>/dev/null | head -1)
+          do
+            if [ -f "$p" ]; then
+              WEST_CMD="$p"
+              break
+            fi
+          done
+
+          if [ -z "$WEST_CMD" ]; then
+            echo "west nie znaleziony — instaluję przez pip"
+            python3 -m pip install west
+            WEST_CMD="west"
           fi
+
+          echo "Używam west: $WEST_CMD"
+
           if [ ! -d "/workdir/ncs/.west" ]; then
-            west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.1.1 /workdir/ncs
-            cd /workdir/ncs && west update --narrow -o=--depth=1
-            west zephyr-export
+            $WEST_CMD init -m https://github.com/nrfconnect/sdk-nrf --mr v3.1.1 /workdir/ncs
+            cd /workdir/ncs && $WEST_CMD update --narrow -o=--depth=1
+            $WEST_CMD zephyr-export
           else
             echo "NCS already cached, skipping west init/update"
           fi
 
       - name: Build for nRF52840DK
         run: |
-          # Activate Python venv where west is installed in the toolchain container
-          if [ -f "/workdir/.venv/bin/activate" ]; then
-            . /workdir/.venv/bin/activate
-          fi
-          west build \
+          WEST_CMD=""
+          for p in \
+            /workdir/.venv/bin/west \
+            /usr/local/bin/west \
+            /usr/bin/west \
+            /opt/nordic/ncs/v3.1.1/bin/west \
+            $(find /opt /workdir /usr -name "west" -type f 2>/dev/null | head -1)
+          do
+            if [ -f "$p" ]; then
+              WEST_CMD="$p"
+              break
+            fi
+          done
+          [ -z "$WEST_CMD" ] && WEST_CMD="west"
+
+          PROJECT_PATH="$(pwd)/project"
+          echo "Buduje z: $PROJECT_PATH"
+          echo "Używam west: $WEST_CMD"
+
+          cd /workdir/ncs
+          $WEST_CMD build \
             -b nrf52840dk/nrf52840 \
-            /workdir/ncs \
+            "$PROJECT_PATH" \
             --sysbuild \
-            -d /workdir/build \
-            -- -DAPP_DIR=/__w/matter-testowy1-nrf52840/matter-testowy1-nrf52840/project
+            -d /workdir/build
 
       - name: Upload firmware artifacts
         if: success()
