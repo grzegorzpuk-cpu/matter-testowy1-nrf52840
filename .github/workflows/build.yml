@@ -14,7 +14,7 @@ jobs:
 
     defaults:
       run:
-        shell: bash
+        shell: bash  # BASH_ENV=/opt/non-interactive-setup.sh dodaje toolchain do PATH automatycznie
 
     steps:
       - name: Checkout project
@@ -30,79 +30,22 @@ jobs:
           restore-keys: |
             ncs-v3.1.1-
 
-      - name: Find and setup west
-        run: |
-          echo "=== PATH ==="
-          echo "$PATH"
-          echo "=== Finding west ==="
-          find /usr /opt /workdir /root /home -name "west" -type f 2>/dev/null | head -10 || true
-          echo "=== Finding python3 ==="
-          find /usr /opt /workdir -name "python3" -type f 2>/dev/null | head -5 || true
-          echo "=== nrfutil ==="
-          which nrfutil || true
-          echo "=== ls /workdir ==="
-          ls /workdir/ 2>/dev/null || echo "(pusty lub brak)"
-          echo "=== ls /opt ==="
-          ls /opt/ 2>/dev/null || echo "(pusty lub brak)"
-
       - name: Initialize NCS workspace
         run: |
-          # Próbuj różne znane lokalizacje west w kontenerze nRF
-          WEST_CMD=""
-          for p in \
-            /workdir/.venv/bin/west \
-            /usr/local/bin/west \
-            /usr/bin/west \
-            /opt/nordic/ncs/v3.1.1/bin/west \
-            $(find /opt /workdir /usr -name "west" -type f 2>/dev/null | head -1)
-          do
-            if [ -f "$p" ]; then
-              WEST_CMD="$p"
-              break
-            fi
-          done
-
-          if [ -z "$WEST_CMD" ]; then
-            echo "west nie znaleziony — instaluję przez pip"
-            python3 -m pip install west
-            WEST_CMD="west"
-          fi
-
-          echo "Używam west: $WEST_CMD"
-
           if [ ! -d "/workdir/ncs/.west" ]; then
-            $WEST_CMD init -m https://github.com/nrfconnect/sdk-nrf --mr v3.1.1 /workdir/ncs
-            cd /workdir/ncs && $WEST_CMD update --narrow -o=--depth=1
-            $WEST_CMD zephyr-export
+            west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.1.1 /workdir/ncs
+            cd /workdir/ncs && west update --narrow -o=--depth=1
+            west zephyr-export
           else
             echo "NCS already cached, skipping west init/update"
           fi
 
       - name: Build for nRF52840DK
         run: |
-          WEST_CMD=""
-          for p in \
-            /workdir/.venv/bin/west \
-            /usr/local/bin/west \
-            /usr/bin/west \
-            /opt/nordic/ncs/v3.1.1/bin/west \
-            $(find /opt /workdir /usr -name "west" -type f 2>/dev/null | head -1)
-          do
-            if [ -f "$p" ]; then
-              WEST_CMD="$p"
-              break
-            fi
-          done
-          [ -z "$WEST_CMD" ] && WEST_CMD="west"
-
-          PROJECT_PATH="$(pwd)/project"
-          echo "Buduje z: $PROJECT_PATH"
-          echo "Używam west: $WEST_CMD"
-
           cd /workdir/ncs
-          $WEST_CMD build \
+          west build \
             -b nrf52840dk/nrf52840 \
-            "$PROJECT_PATH" \
+            "$(pwd)/../../../__w/matter-testowy1-nrf52840/matter-testowy1-nrf52840/project" \
             --sysbuild \
             -d /workdir/build
 
